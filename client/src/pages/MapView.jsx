@@ -11,16 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import {
-  ArrowLeftRight,
-  Clock,
-  Layers3,
-  MapPin,
-  Route,
-  SlidersHorizontal,
-  TriangleAlert,
-  X,
-} from 'lucide-react';
+import { ArrowRight, X } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { useAppData } from '../lib/appData.jsx';
 import { useScenario } from '../lib/scenario.jsx';
@@ -39,17 +30,19 @@ import {
 import { AUTHORITY_COLOR, CHART_AXIS, CHART_GRID, STATUS, tooltipStyle, strokeWeight, vcColor } from '../lib/theme.js';
 import { hourLabel, num } from '../lib/format.js';
 
-const TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+const TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
+const LABEL_URL = 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png';
 const TILE_ATTR =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
-/** Imperatively pans the map when a corridor is selected from a list. */
 function MapFocus({ corridor }) {
   const map = useMap();
   useEffect(() => {
     if (!corridor?.path?.length) return;
-    const bounds = corridor.path.map(([lat, lng]) => [lat, lng]);
-    map.flyToBounds(bounds, { padding: [70, 70], duration: 0.7, maxZoom: 15 });
+    map.flyToBounds(
+      corridor.path.map(([lat, lng]) => [lat, lng]),
+      { padding: [80, 80], duration: 0.65, maxZoom: 15 }
+    );
   }, [corridor, map]);
   return null;
 }
@@ -69,8 +62,8 @@ export default function MapView() {
   const [detailLoading, setDetailLoading] = useState(false);
   const abortRef = useRef(null);
 
-  // Network state for the chosen hour (no live jitter here — the map is an
-  // analysis surface and should not shimmer while an operator studies it).
+  // No live jitter here — the map is an analysis surface and should hold still
+  // while an operator reads it.
   useEffect(() => {
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -85,7 +78,6 @@ export default function MapView() {
     return () => controller.abort();
   }, [hour]);
 
-  // Corridor drill-down
   useEffect(() => {
     if (!selected) {
       setDetail(null);
@@ -114,7 +106,7 @@ export default function MapView() {
       [...(state?.results || [])]
         .filter((r) => (authority === 'ALL' ? true : corridorByCode[r.code]?.jurisdiction === authority))
         .sort((a, b) => b.vc - a.vc)
-        .slice(0, 8),
+        .slice(0, 9),
     [state, authority, corridorByCode]
   );
 
@@ -127,38 +119,37 @@ export default function MapView() {
   const inPeak = (hour >= 9 && hour < 12) || (hour >= 16 && hour < 19);
 
   return (
-    <div className="space-y-5 p-4 sm:p-6">
+    <div className="space-y-6 p-5 sm:p-7">
       <PageHeader
         step={2}
         title="Live corridor map"
-        subtitle="Pick a time of day and read where Nagpur's network is failing. Click any corridor for its saturation curve and diversion options."
+        subtitle="Pick a time of day and read where the network is failing. Click any corridor for its saturation curve and diversion options."
         actions={
-          <button
-            type="button"
-            onClick={() => navigate('/simulate')}
-            className="btn-primary !py-2 !text-xs"
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
+          <button type="button" onClick={() => navigate('/simulate')} className="btn-primary">
             Take this to simulation
+            <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.25} />
           </button>
         }
       />
 
       <ErrorNote>{error}</ErrorNote>
 
-      {/* ------------------------------------------------------- time control */}
-      <Panel className="p-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
-          <div className="flex min-w-0 flex-1 items-center gap-4">
-            <div className="flex shrink-0 items-center gap-2">
-              <Clock className="h-4 w-4 text-brand-400" strokeWidth={2} />
-              <span className="tnum w-14 text-lg font-bold text-white">{hourLabel(hour)}</span>
+      {/* --------------------------------------------------------- time + filter */}
+      <Panel className="px-5 py-4">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-5">
+            <div className="flex shrink-0 items-baseline gap-2">
+              <span className="tnum text-2xl font-medium tracking-tight text-bone-50">{hourLabel(hour)}</span>
+              <span className={cx('text-2xs', inPeak ? 'text-flow-moderate' : 'text-ink-600')}>
+                {inPeak ? 'peak' : 'off-peak'}
+              </span>
             </div>
+
             <div className="relative min-w-0 flex-1">
-              {/* Peak window bands behind the slider track */}
-              <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 overflow-hidden rounded-full">
-                <div className="absolute inset-y-0 bg-amber-500/25" style={{ left: `${(9 / 24) * 100}%`, width: `${(3 / 24) * 100}%` }} />
-                <div className="absolute inset-y-0 bg-amber-500/25" style={{ left: `${(16 / 24) * 100}%`, width: `${(3 / 24) * 100}%` }} />
+              {/* Peak windows drawn into the track so they read as part of the scale. */}
+              <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-ink-700">
+                <div className="absolute inset-y-0 bg-flow-moderate/30" style={{ left: `${(9 / 23) * 100}%`, width: `${(3 / 23) * 100}%` }} />
+                <div className="absolute inset-y-0 bg-flow-moderate/30" style={{ left: `${(16 / 23) * 100}%`, width: `${(3 / 23) * 100}%` }} />
               </div>
               <input
                 type="range"
@@ -168,30 +159,17 @@ export default function MapView() {
                 value={hour}
                 onChange={(e) => setHour(Number(e.target.value))}
                 aria-label="Hour of day"
-                className="relative h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/10
-                  [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none
-                  [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-brand-400 [&::-webkit-slider-thumb]:shadow-glow
-                  [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full
-                  [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-brand-400"
+                className="range relative bg-transparent"
               />
-              <div className="mt-1.5 flex justify-between text-[10px] text-slate-600">
-                {['00', '06', '09', '12', '16', '19', '23'].map((t) => (
-                  <span key={t}>{t}:00</span>
+              <div className="tnum mt-2 flex justify-between text-[9px] text-ink-600">
+                {['00', '04', '08', '12', '16', '20', '23'].map((t) => (
+                  <span key={t}>{t}</span>
                 ))}
               </div>
             </div>
-            <span
-              className={cx(
-                'chip shrink-0',
-                inPeak ? 'bg-amber-500/12 text-amber-300' : 'bg-white/[0.06] text-slate-500'
-              )}
-            >
-              {inPeak ? 'Peak window' : 'Off-peak'}
-            </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 border-white/[0.07] lg:border-l lg:pl-4">
-            <Layers3 className="mr-0.5 h-3.5 w-3.5 text-slate-500" />
+          <div className="flex flex-wrap items-center gap-1 lg:border-l lg:pl-5" style={{ borderColor: 'var(--rule)' }}>
             <FilterChip active={authority === 'ALL'} onClick={() => setAuthority('ALL')} label="All" />
             {Object.keys(jurisdictions).map((code) => (
               <FilterChip
@@ -207,17 +185,11 @@ export default function MapView() {
         </div>
       </Panel>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        {/* ------------------------------------------------------------ map */}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
         <Panel className="overflow-hidden">
-          <div className="relative h-[560px]">
-            <MapContainer
-              center={center}
-              zoom={12}
-              scrollWheelZoom
-              className="h-full w-full"
-              zoomControl
-            >
+          <div className="relative h-[580px]">
+            <MapContainer center={center} zoom={12} scrollWheelZoom className="h-full w-full" zoomControl>
+              {/* Labels ride above the corridors so street names stay readable. */}
               <TileLayer url={TILE_URL} attribution={TILE_ATTR} maxZoom={19} />
 
               {visible.map((c) => {
@@ -231,59 +203,49 @@ export default function MapView() {
                     pathOptions={{
                       color: vcColor(r.vc),
                       weight: strokeWeight(c, isSelected),
-                      opacity: isSelected ? 1 : 0.82,
+                      opacity: !selected || isSelected ? 0.92 : 0.35,
                       lineCap: 'round',
                       className: isSelected ? 'corridor-selected' : undefined,
                     }}
                     eventHandlers={{ click: () => select(c.code) }}
                   >
                     <LeafletTooltip sticky>
-                      <div className="min-w-[170px]">
-                        <p className="text-[12px] font-semibold text-white">{c.shortName}</p>
-                        <p className="mt-0.5 text-[10px] text-slate-400">
-                          {c.jurisdiction} · {c.roadClass}
-                        </p>
-                        <div className="mt-1.5 flex items-center gap-3 text-[11px]">
-                          <span style={{ color: vcColor(r.vc) }} className="font-semibold">
-                            v/c {num(r.vc, 2)}
-                          </span>
-                          <span className="text-slate-400">{num(r.avgSpeed, 0)} km/h</span>
-                          <span className="text-slate-400">LOS {r.los}</span>
-                        </div>
-                      </div>
+                      <p className="text-xs font-medium text-bone-50">{c.shortName}</p>
+                      <p className="tnum mt-1 text-[10px] text-ink-500">
+                        {c.jurisdiction} · {c.roadClass}
+                      </p>
+                      <p className="tnum mt-1.5 text-[11px]">
+                        <span style={{ color: vcColor(r.vc) }}>v/c {num(r.vc, 2)}</span>
+                        <span className="text-bone-400"> · {num(r.avgSpeed, 0)} km/h · LOS {r.los}</span>
+                      </p>
                     </LeafletTooltip>
                   </Polyline>
                 );
               })}
 
+              <TileLayer url={LABEL_URL} maxZoom={19} />
               <MapFocus corridor={selectedCorridor} />
             </MapContainer>
 
-            {/* Legend overlay */}
-            <div className="pointer-events-none absolute bottom-4 left-4 z-[400] rounded-lg border border-white/10 bg-ink-950/85 px-3 py-2.5 backdrop-blur-md">
-              <p className="mb-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                Saturation
-              </p>
+            <div className="pointer-events-none absolute bottom-5 left-4 z-[400] rounded-md bg-ink-950/85 px-3 py-2.5 backdrop-blur-sm">
+              <p className="label mb-2">Saturation</p>
               <div className="space-y-1.5">
                 {Object.values(STATUS).map((st) => (
-                  <div key={st.key} className="flex items-center gap-2 text-[10px] text-slate-400">
-                    <span className="h-1 w-5 rounded-full" style={{ background: st.color }} />
+                  <div key={st.key} className="flex items-center gap-2 text-2xs text-ink-500">
+                    <span className="h-[2px] w-5 rounded-full" style={{ background: st.color }} />
                     {st.label}
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="pointer-events-none absolute right-4 top-4 z-[400] rounded-lg border border-white/10 bg-ink-950/85 px-3 py-2 text-[11px] backdrop-blur-md">
-              <span className="tnum font-semibold text-white">{visible.length}</span>
-              <span className="text-slate-500"> corridors · </span>
-              <span className="tnum font-semibold text-white">{hourLabel(hour)}</span>
+            <div className="tnum pointer-events-none absolute right-4 top-4 z-[400] rounded-md bg-ink-950/85 px-3 py-1.5 text-2xs text-bone-300 backdrop-blur-sm">
+              {visible.length} corridors · {hourLabel(hour)}
             </div>
           </div>
         </Panel>
 
-        {/* --------------------------------------------------- side panel */}
-        <div className="space-y-5">
+        <div className="space-y-6">
           {selected ? (
             <CorridorDetail
               detail={detail}
@@ -297,9 +259,9 @@ export default function MapView() {
               onPick={select}
             />
           ) : (
-            <Panel>
-              <PanelHead title="Congestion hotspots" subtitle={`Worst corridors at ${hourLabel(hour)}`} icon={TriangleAlert} />
-              <div className="divide-y divide-white/[0.04]">
+            <Panel className="self-start">
+              <PanelHead title="Congestion hotspots" subtitle={`Worst corridors at ${hourLabel(hour)}`} />
+              <div className="divide-y divide-white/[0.045]">
                 {hotspots.map((r, i) => {
                   const c = corridorByCode[r.code];
                   return (
@@ -307,17 +269,18 @@ export default function MapView() {
                       key={r.code}
                       type="button"
                       onClick={() => select(r.code)}
-                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.03]"
+                      className="row-hover flex w-full items-center gap-3 px-5 py-3 text-left"
                     >
-                      <span className="tnum w-4 shrink-0 text-xs text-slate-600">{i + 1}</span>
-                      <span className="h-8 w-1 shrink-0 rounded-full" style={{ background: vcColor(r.vc) }} />
+                      <span className="tnum w-3 shrink-0 text-2xs text-ink-600">{i + 1}</span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold text-slate-200">{c?.shortName}</p>
-                        <div className="mt-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <p className="truncate text-xs text-bone-100">{c?.shortName}</p>
+                          <AuthorityTag code={c?.jurisdiction} className="shrink-0" />
+                        </div>
+                        <div className="mt-1.5">
                           <VcMeter vc={r.vc} />
                         </div>
                       </div>
-                      <AuthorityTag code={c?.jurisdiction} className="shrink-0" />
                     </button>
                   );
                 })}
@@ -337,12 +300,19 @@ function FilterChip({ active, onClick, label, color, title }) {
       onClick={onClick}
       title={title}
       className={cx(
-        'rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all',
-        active ? 'text-ink-950' : 'text-slate-400 hover:text-slate-200'
+        'rounded px-2 py-1 text-2xs font-medium transition-colors',
+        active ? 'bg-white/[0.1] text-bone-50' : 'text-ink-500 hover:text-bone-200'
       )}
-      style={active ? { background: color || '#22d3ee' } : { background: 'rgba(255,255,255,0.05)' }}
     >
-      {label}
+      <span className="flex items-center gap-1.5">
+        {color && (
+          <span
+            className="h-1.5 w-1.5 rounded-[1px] transition-opacity"
+            style={{ background: color, opacity: active ? 1 : 0.45 }}
+          />
+        )}
+        {label}
+      </span>
     </button>
   );
 }
@@ -365,74 +335,61 @@ function CorridorDetail({ detail, loading, hour, onClose, onSimulate, onPick }) 
         <PanelHead
           title={c.shortName}
           subtitle={c.name}
-          icon={Route}
           actions={
-            <button type="button" onClick={onClose} className="rounded-md p-1 text-slate-500 hover:text-slate-300" aria-label="Close">
-              <X className="h-4 w-4" />
+            <button type="button" onClick={onClose} className="rounded p-1 text-ink-500 hover:text-bone-200" aria-label="Close">
+              <X className="h-3.5 w-3.5" />
             </button>
           }
         />
-        <div className="space-y-4 p-4">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="space-y-5 p-5">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <AuthorityTag code={c.jurisdiction} />
             <StatusBadge status={r.status} />
             <LosBadge los={r.los} />
-            <span className="chip bg-white/[0.06] text-slate-400">{c.roadClass}</span>
+            <span className="text-2xs text-ink-500">{c.roadClass}</span>
           </div>
 
-          <div className="grid grid-cols-2 gap-2.5">
-            <Metric label="Saturation" value={num(r.vc, 2)} sub={`${num(r.pcuVolume)} / ${num(r.capacity)} PCU`} />
-            <Metric label="Avg speed" value={`${num(r.avgSpeed, 1)}`} sub={`free-flow ${r.freeFlowSpeed} km/h`} />
-            <Metric label="Excess delay" value={`${num(r.delayMin, 1)}m`} sub={`${num(r.travelTimeMin, 1)} min end-to-end`} />
-            <Metric label="Queue" value={r.queueMetres > 0 ? `${num(r.queueMetres)}m` : 'None'} sub={`${num(r.queueVehicles)} vehicles`} />
-          </div>
+          <dl className="grid grid-cols-2 gap-x-5 gap-y-4">
+            <Stat label="Saturation" value={num(r.vc, 2)} sub={`${num(r.pcuVolume)} / ${num(r.capacity)} PCU`} />
+            <Stat label="Avg speed" value={`${num(r.avgSpeed, 1)}`} sub={`free-flow ${r.freeFlowSpeed} km/h`} />
+            <Stat label="Excess delay" value={`${num(r.delayMin, 1)}m`} sub={`${num(r.travelTimeMin, 1)} min end-to-end`} />
+            <Stat label="Queue" value={r.queueMetres > 0 ? `${num(r.queueMetres)}m` : '—'} sub={`${num(r.queueVehicles)} vehicles`} />
+          </dl>
 
           <div>
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-              Saturation across the day
-            </p>
-            <div className="h-[130px]">
+            <p className="label mb-2">Saturation across the day</p>
+            <div className="h-[124px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={profile} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+                <AreaChart data={profile} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="gVc" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.4} />
-                      <stop offset="100%" stopColor="#22d3ee" stopOpacity={0.02} />
+                      <stop offset="0%" stopColor="#e2ded7" stopOpacity={0.2} />
+                      <stop offset="100%" stopColor="#e2ded7" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke={CHART_GRID} vertical={false} />
-                  <XAxis dataKey="label" stroke={CHART_AXIS} tick={{ fontSize: 9 }} tickLine={false} axisLine={false} interval={4} />
-                  <YAxis stroke={CHART_AXIS} tick={{ fontSize: 9 }} tickLine={false} axisLine={false} width={38} />
-                  <ReferenceLine y={1} stroke="#ef4444" strokeDasharray="3 3" strokeWidth={1} />
-                  <ReferenceLine x={`${String(hour).padStart(2, '0')}:00`} stroke="#22d3ee" strokeWidth={1.5} />
+                  <XAxis dataKey="label" stroke={CHART_AXIS} tick={{ fontSize: 8, fontFamily: '"IBM Plex Mono", monospace' }} tickLine={false} axisLine={false} interval={5} />
+                  <YAxis stroke={CHART_AXIS} tick={{ fontSize: 8, fontFamily: '"IBM Plex Mono", monospace' }} tickLine={false} axisLine={false} width={26} />
+                  <ReferenceLine y={1} stroke="#f87171" strokeDasharray="3 3" strokeWidth={1} />
+                  <ReferenceLine x={`${String(hour).padStart(2, '0')}:00`} stroke="#e2ded7" strokeWidth={1} />
                   <Tooltip {...tooltipStyle} formatter={(v) => [num(v, 2), 'v/c']} />
-                  <Area type="monotone" dataKey="vc" stroke="#22d3ee" strokeWidth={1.75} fill="url(#gVc)" />
+                  <Area type="monotone" dataKey="vc" stroke="#e2ded7" strokeWidth={1.5} fill="url(#gVc)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-            <p className="mt-1 text-[10px] text-slate-600">
-              Red line marks capacity (v/c = 1.0); cyan line marks the selected hour.
+            <p className="mt-1.5 text-[10px] leading-relaxed text-ink-600">
+              Red marks capacity (v/c 1.0); the light line marks the selected hour.
             </p>
           </div>
 
           {c.landmarks?.length > 0 && (
             <div>
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                Along this corridor
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {c.landmarks.map((l) => (
-                  <span key={l} className="inline-flex items-center gap-1 rounded-md bg-white/[0.05] px-2 py-1 text-[10px] text-slate-400">
-                    <MapPin className="h-2.5 w-2.5" />
-                    {l}
-                  </span>
-                ))}
-              </div>
+              <p className="label mb-2">Along this corridor</p>
+              <p className="text-2xs leading-relaxed text-bone-400">{c.landmarks.join(' · ')}</p>
             </div>
           )}
 
-          <button type="button" onClick={() => onSimulate(c.code)} className="btn-primary w-full !text-xs">
-            <SlidersHorizontal className="h-3.5 w-3.5" />
+          <button type="button" onClick={() => onSimulate(c.code)} className="btn-primary w-full">
             Simulate a fix for this corridor
           </button>
         </div>
@@ -440,8 +397,8 @@ function CorridorDetail({ detail, loading, hour, onClose, onSimulate, onPick }) 
 
       {alternates?.length > 0 && (
         <Panel>
-          <PanelHead title="Diversion options" subtitle="Parallel routes and their spare capacity" icon={ArrowLeftRight} />
-          <div className="divide-y divide-white/[0.04]">
+          <PanelHead title="Diversion options" subtitle="Parallel routes and their spare capacity" />
+          <div className="divide-y divide-white/[0.045]">
             {alternates.map((alt) => {
               const spare = Math.max(0, alt.current.capacity - alt.current.pcuVolume);
               return (
@@ -449,12 +406,12 @@ function CorridorDetail({ detail, loading, hour, onClose, onSimulate, onPick }) 
                   key={alt.code}
                   type="button"
                   onClick={() => onPick(alt.code)}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.03]"
+                  className="row-hover flex w-full items-center gap-3 px-5 py-3 text-left"
                 >
-                  <span className="h-8 w-1 shrink-0 rounded-full" style={{ background: vcColor(alt.current.vc) }} />
+                  <span className="h-7 w-[2px] shrink-0 rounded-full" style={{ background: vcColor(alt.current.vc) }} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-semibold text-slate-200">{alt.name}</p>
-                    <p className="tnum mt-0.5 text-[10px] text-slate-500">
+                    <p className="truncate text-xs text-bone-100">{alt.name}</p>
+                    <p className="tnum mt-0.5 text-2xs text-ink-600">
                       v/c {num(alt.current.vc, 2)} · {num(spare)} PCU/hr spare
                     </p>
                   </div>
@@ -469,12 +426,12 @@ function CorridorDetail({ detail, loading, hour, onClose, onSimulate, onPick }) 
   );
 }
 
-function Metric({ label, value, sub }) {
+function Stat({ label, value, sub }) {
   return (
-    <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5">
-      <p className="text-[9px] font-medium uppercase tracking-wider text-slate-500">{label}</p>
-      <p className="tnum mt-1 text-base font-bold text-white">{value}</p>
-      <p className="tnum mt-0.5 truncate text-[10px] text-slate-600">{sub}</p>
+    <div>
+      <dt className="label">{label}</dt>
+      <dd className="tnum mt-1.5 text-lg font-medium leading-none text-bone-50">{value}</dd>
+      <dd className="tnum mt-1.5 truncate text-2xs text-ink-600">{sub}</dd>
     </div>
   );
 }

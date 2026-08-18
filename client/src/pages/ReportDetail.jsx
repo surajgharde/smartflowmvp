@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { ArrowLeft, Download, Printer, Waves } from 'lucide-react';
+import { ArrowLeft, Download, Printer } from 'lucide-react';
 import { api } from '../lib/api.js';
+import { Mark } from '../components/AppShell.jsx';
 import { ErrorNote, Loading, Panel, Spinner, cx, useToast } from '../components/ui.jsx';
 import { dayLabel, dateLabel, inr, lakh, num } from '../lib/format.js';
 import { LOS_COLOR } from '../lib/theme.js';
@@ -78,17 +79,17 @@ export default function ReportDetail() {
   return (
     <div className="p-4 sm:p-6">
       {/* ------------------------------------------------------ toolbar */}
-      <div className="no-print mb-5 flex flex-wrap items-center justify-between gap-3">
-        <Link to="/reports" className="btn-ghost !py-2 !text-xs">
-          <ArrowLeft className="h-3.5 w-3.5" />
+      <div className="no-print mb-6 flex flex-wrap items-center justify-between gap-3">
+        <Link to="/reports" className="btn-quiet">
+          <ArrowLeft className="h-3 w-3" />
           All reports
         </Link>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => window.print()} className="btn-ghost !py-2 !text-xs">
+          <button type="button" onClick={() => window.print()} className="btn-ghost !text-xs">
             <Printer className="h-3.5 w-3.5" />
             Print
           </button>
-          <button type="button" onClick={downloadPdf} disabled={exporting} className="btn-primary !py-2 !text-xs">
+          <button type="button" onClick={downloadPdf} disabled={exporting} className="btn-primary !text-xs">
             {exporting ? <Spinner /> : <Download className="h-3.5 w-3.5" />}
             {exporting ? 'Building PDF…' : 'Download PDF'}
           </button>
@@ -97,32 +98,30 @@ export default function ReportDetail() {
 
       {/* -------------------------------------------------------- paper */}
       <div className="mx-auto max-w-[860px]">
-        <div ref={paperRef} className="rounded-lg bg-white p-8 text-slate-900 shadow-2xl sm:p-12">
+        <div ref={paperRef} className="rounded bg-white p-9 text-slate-900 shadow-lift sm:p-14">
           {/* letterhead */}
-          <header className="flex items-start justify-between gap-6 border-b-2 border-slate-900 pb-5">
+          <header className="flex items-start justify-between gap-6 border-b border-slate-900 pb-6">
             <div className="flex items-start gap-3.5">
-              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-slate-900">
-                <Waves className="h-5 w-5 text-white" strokeWidth={2.5} />
-              </div>
+              <Mark size={26} className="mt-0.5 shrink-0 text-slate-900" />
               <div>
-                <p className="text-lg font-bold tracking-tight text-slate-900">SmartFlow</p>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                <p className="text-[17px] font-semibold tracking-tight text-slate-900">SmartFlow</p>
+                <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                   Nagpur Traffic Command · {report.authority}
                 </p>
-                <p className="mt-1.5 text-[11px] text-slate-600">
-                  Traffic Management Simulation & Impact Assessment
+                <p className="mt-2 text-[11px] text-slate-600">
+                  Traffic Management Simulation &amp; Impact Assessment
                 </p>
               </div>
             </div>
             <div className="shrink-0 text-right">
               <QRCodeSVG
                 value={`${window.location.origin}/reports/${report._id}`}
-                size={64}
+                size={62}
                 level="M"
                 bgColor="#ffffff"
                 fgColor="#0f172a"
               />
-              <p className="mt-1.5 text-[8px] uppercase tracking-wider text-slate-400">Scan to verify</p>
+              <p className="mt-1.5 text-[8px] uppercase tracking-[0.12em] text-slate-400">Scan to verify</p>
             </div>
           </header>
 

@@ -5,6 +5,9 @@
 @layer base {
   :root {
     color-scheme: dark;
+    /* Hairline used everywhere instead of a visible border on every box. */
+    --rule: rgba(255, 255, 255, 0.07);
+    --rule-strong: rgba(255, 255, 255, 0.12);
   }
 
   html,
@@ -14,140 +17,230 @@
   }
 
   body {
-    @apply bg-ink-950 text-slate-200 antialiased;
-    background-image:
-      radial-gradient(1100px 600px at 12% -8%, rgba(34, 211, 238, 0.09), transparent 60%),
-      radial-gradient(900px 500px at 100% 0%, rgba(129, 140, 248, 0.08), transparent 55%);
-    background-attachment: fixed;
+    @apply bg-ink-950 text-bone-200 antialiased;
+    font-feature-settings: 'cv05' 1, 'ss03' 1;
   }
 
-  /* Numeric columns stay aligned as values tick during live monitoring. */
+  /*
+   * A faint grain over the whole app. Flat #0a0a0b reads as plastic; a little
+   * noise gives the surfaces a physical quality you notice only by its absence.
+   */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.028;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  #root {
+    position: relative;
+    z-index: 1;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply text-bone-50;
+    letter-spacing: -0.018em;
+  }
+
+  /* All numerals are mono and tabular so live values never jitter. */
   .tnum {
+    @apply font-mono;
     font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
   }
 
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 11px;
+    height: 11px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply rounded-full bg-white/10;
+    @apply rounded-full border-4 border-solid border-transparent bg-ink-600 bg-clip-content;
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-white/20;
+    @apply bg-ink-500;
   }
 
   *:focus-visible {
-    @apply outline-none ring-2 ring-brand-400/70 ring-offset-2 ring-offset-ink-950;
+    @apply outline-none ring-2 ring-bone-200/60 ring-offset-2 ring-offset-ink-950;
+  }
+
+  ::selection {
+    background: rgba(250, 249, 247, 0.16);
   }
 }
 
 @layer components {
+  /*
+   * Panels lean on background elevation and a single hairline rather than a
+   * drawn border on every side — fewer boxes, more air.
+   */
   .panel {
-    @apply rounded-xl border border-white/[0.07] bg-ink-900/70 shadow-panel backdrop-blur-sm;
+    @apply rounded-lg bg-ink-900 shadow-panel;
+  }
+
+  .panel-flush {
+    @apply rounded-lg bg-ink-900/60 shadow-panel;
   }
 
   .panel-head {
-    @apply flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3;
+    @apply flex items-baseline justify-between gap-4 px-5 pb-3 pt-4;
+    border-bottom: 1px solid var(--rule);
   }
 
-  .panel-title {
-    @apply text-[13px] font-semibold uppercase tracking-[0.14em] text-slate-400;
+  /* Small caps label. Used sparingly — not on every container. */
+  .label {
+    @apply text-2xs font-medium uppercase tracking-label text-ink-500;
   }
+
+  .rule {
+    border-color: var(--rule);
+  }
+
+  /* ---------------------------------------------------------- buttons ---- */
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium
-      transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-md px-3.5 py-2 text-[13px] font-medium
+      transition-[background-color,color,box-shadow,transform] duration-150
+      disabled:pointer-events-none disabled:opacity-35;
   }
+
+  /* Primary is bone, not a hue — colour stays reserved for data. */
   .btn-primary {
-    @apply btn bg-brand-500 text-ink-950 hover:bg-brand-400 active:scale-[0.98];
+    @apply btn bg-bone-100 text-ink-950 hover:bg-white active:translate-y-px;
   }
+
   .btn-ghost {
-    @apply btn border border-white/10 bg-white/[0.03] text-slate-300 hover:border-white/20 hover:bg-white/[0.07] hover:text-white;
+    @apply btn text-bone-300 hover:bg-white/[0.06] hover:text-bone-50;
+    box-shadow: inset 0 0 0 1px var(--rule);
   }
+  .btn-ghost:hover {
+    box-shadow: inset 0 0 0 1px var(--rule-strong);
+  }
+
   .btn-danger {
-    @apply btn border border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20;
+    @apply btn bg-flow-severe/[0.12] text-flow-severe hover:bg-flow-severe/20;
   }
+
+  .btn-quiet {
+    @apply btn px-2.5 py-1.5 text-2xs text-ink-500 hover:bg-white/[0.05] hover:text-bone-200;
+  }
+
+  /* ----------------------------------------------------------- inputs ---- */
 
   .field {
-    @apply w-full rounded-lg border border-white/10 bg-ink-950/60 px-3 py-2.5 text-sm text-slate-100
-      placeholder:text-slate-500 transition-colors focus:border-brand-500/60;
+    @apply w-full rounded-md bg-ink-850 px-3 py-2.5 text-sm text-bone-100
+      placeholder:text-ink-500 transition-shadow;
+    box-shadow: inset 0 0 0 1px var(--rule);
   }
+  .field:hover {
+    box-shadow: inset 0 0 0 1px var(--rule-strong);
+  }
+  .field:focus {
+    @apply outline-none;
+    box-shadow: inset 0 0 0 1px rgba(250, 249, 247, 0.45);
+  }
+
+  /* ------------------------------------------------------------ chips ---- */
 
   .chip {
-    @apply inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide;
+    @apply inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-label;
   }
 
-  /* Animated stripe used on the simulation progress bar. */
-  .stripe {
-    background-image: linear-gradient(
-      115deg,
-      rgba(255, 255, 255, 0.16) 25%,
-      transparent 25%,
-      transparent 50%,
-      rgba(255, 255, 255, 0.16) 50%,
-      rgba(255, 255, 255, 0.16) 75%,
-      transparent 75%
-    );
-    background-size: 1.1rem 1.1rem;
+  .chip-quiet {
+    @apply chip bg-white/[0.06] text-bone-400;
+  }
+
+  /* Range inputs, restyled to match the rest of the console. */
+  .range {
+    @apply h-1 w-full cursor-pointer appearance-none rounded-full bg-ink-700;
+  }
+  .range::-webkit-slider-thumb {
+    @apply h-3.5 w-3.5 appearance-none rounded-full bg-bone-100;
+    box-shadow: 0 0 0 3px rgba(10, 10, 11, 0.9);
+  }
+  .range::-moz-range-thumb {
+    @apply h-3.5 w-3.5 rounded-full border-0 bg-bone-100;
+    box-shadow: 0 0 0 3px rgba(10, 10, 11, 0.9);
+  }
+
+  /* Row hover for data tables. */
+  .row-hover {
+    @apply transition-colors hover:bg-white/[0.025];
   }
 }
 
-/* ---- Leaflet theming: make the map read as part of the console ---- */
+/* ---- Leaflet, themed to sit inside the console ------------------------- */
 .leaflet-container {
-  background: #0b1120;
+  background: #0f0f11;
   font-family: inherit;
 }
 .leaflet-control-attribution {
-  background: rgba(7, 11, 20, 0.78) !important;
-  color: #64748b !important;
-  font-size: 10px !important;
-  border-top-left-radius: 6px;
+  background: rgba(10, 10, 11, 0.82) !important;
+  color: #55555e !important;
+  font-size: 9px !important;
+  padding: 1px 6px !important;
+  border-top-left-radius: 4px;
 }
 .leaflet-control-attribution a {
-  color: #94a3b8 !important;
+  color: #7d766b !important;
 }
 .leaflet-bar a {
-  background: #0f1729 !important;
-  color: #cbd5e1 !important;
+  background: #141416 !important;
+  color: #c9c3b9 !important;
   border-color: rgba(255, 255, 255, 0.08) !important;
 }
 .leaflet-bar a:hover {
-  background: #1d2942 !important;
+  background: #212125 !important;
 }
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
-  background: #0f1729 !important;
-  color: #e2e8f0 !important;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 18px 40px -20px rgba(0, 0, 0, 0.95) !important;
+  background: #141416 !important;
+  color: #e2ded7 !important;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 6px !important;
 }
 .leaflet-popup-content {
-  margin: 10px 12px !important;
+  margin: 9px 11px !important;
   font-size: 12px;
 }
-.leaflet-popup-close-button {
-  color: #64748b !important;
+.leaflet-tooltip {
+  background: rgba(15, 15, 17, 0.96) !important;
+  border: 1px solid rgba(255, 255, 255, 0.09) !important;
+  border-radius: 6px !important;
+  color: #e2ded7 !important;
+  box-shadow: 0 20px 40px -24px rgba(0, 0, 0, 0.95) !important;
+  padding: 7px 9px !important;
+}
+.leaflet-tooltip::before {
+  display: none;
 }
 
-/* Corridor highlight pulse when a hotspot is selected. */
+/* Selected corridor gets a travelling dash so it reads as "live". */
 @keyframes dashFlow {
   to {
     stroke-dashoffset: -24;
   }
 }
 .corridor-selected {
-  stroke-dasharray: 10 6;
-  animation: dashFlow 1s linear infinite;
+  stroke-dasharray: 9 7;
+  animation: dashFlow 1.1s linear infinite;
 }
 
-/* Printed / exported report reverts to ink-on-paper. */
+/* Printed / exported report reverts to ink on paper. */
 @media print {
   body {
     background: #fff !important;
+  }
+  body::before {
+    display: none !important;
   }
   .no-print {
     display: none !important;

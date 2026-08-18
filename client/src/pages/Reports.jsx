@@ -1,13 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  BadgeCheck,
-  Beaker,
-  FileText,
-  Layers,
-  Trash2,
-  TriangleAlert,
-} from 'lucide-react';
+import { ArrowUpRight, Trash2 } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import PageHeader from '../components/PageHeader.jsx';
@@ -87,18 +80,19 @@ export default function Reports() {
   }
 
   return (
-    <div className="space-y-5 p-4 sm:p-6">
+    <div className="space-y-6 p-5 sm:p-7">
       <PageHeader
         step={6}
         title="Scenarios & reports"
-        subtitle="Saved strategies and the signed reports generated from them — each one a frozen record of what was simulated and what it was expected to achieve."
+        subtitle="Saved strategies and the signed reports generated from them — each a frozen record of what was simulated and what it was expected to achieve."
         actions={
           <Segmented
             value={tab}
             onChange={setTab}
+            size="sm"
             options={[
-              { value: 'reports', label: `Reports (${reports.length})` },
-              { value: 'scenarios', label: `Scenarios (${simulations.length})` },
+              { value: 'reports', label: `Reports ${reports.length}` },
+              { value: 'scenarios', label: `Scenarios ${simulations.length}` },
             ]}
           />
         }
@@ -111,43 +105,41 @@ export default function Reports() {
           <Loading label="Loading records" />
         </Panel>
       ) : tab === 'reports' ? (
-        <Panel>
-          <PanelHead title="Generated reports" icon={FileText} />
+        <Panel className="overflow-hidden">
+          <PanelHead title="Generated reports" />
           {reports.length === 0 ? (
             <EmptyState
-              icon={FileText}
               title="No reports yet"
-              description="Run a simulation, then use 'Apply & generate report' on the Results screen to produce a citable document."
+              description="Run a simulation, then use ‘Apply & generate report’ on the Results screen to produce a citable document."
             />
           ) : (
-            <div className="divide-y divide-white/[0.04]">
+            <div className="divide-y divide-white/[0.045]">
               {reports.map((r) => (
-                <div key={r._id} className="flex items-center gap-4 px-4 py-3.5 transition-colors hover:bg-white/[0.03]">
+                <div key={r._id} className="row-hover flex items-center gap-4 px-5 py-3.5">
                   <button
                     type="button"
                     onClick={() => navigate(`/reports/${r._id}`)}
-                    className="flex min-w-0 flex-1 items-center gap-3.5 text-left"
+                    className="group flex min-w-0 flex-1 items-center gap-4 text-left"
                   >
-                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-brand-500/25 bg-brand-500/10 text-brand-300">
-                      <FileText className="h-4 w-4" strokeWidth={2} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-slate-200">{r.title}</p>
-                      <p className="tnum mt-0.5 truncate text-[11px] text-slate-500">
-                        {r.refId} · {r.generatedByName} · {dateLabel(r.createdAt)}
+                    <span className="tnum shrink-0 text-2xs text-ink-600">{r.refId}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px] text-bone-100">{r.title}</p>
+                      <p className="tnum mt-0.5 truncate text-2xs text-ink-600">
+                        {r.generatedByName} · {dateLabel(r.createdAt)}
                       </p>
                     </div>
+                    <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-ink-600 transition-colors group-hover:text-bone-200" />
                   </button>
-                  <span className="chip shrink-0 bg-white/[0.06] text-slate-400">
+                  <span className="shrink-0 text-2xs text-ink-500">
                     {r.windowId === 'morning' ? 'AM peak' : 'PM peak'}
                   </span>
                   <button
                     type="button"
                     onClick={() => removeReport(r)}
-                    className="shrink-0 rounded p-1.5 text-slate-600 transition-colors hover:text-rose-400"
+                    className="shrink-0 rounded p-1.5 text-ink-600 transition-colors hover:text-flow-severe"
                     aria-label="Delete report"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="h-3 w-3" />
                   </button>
                 </div>
               ))}
@@ -155,68 +147,57 @@ export default function Reports() {
           )}
         </Panel>
       ) : (
-        <Panel>
-          <PanelHead title="Saved scenarios" icon={Layers} />
+        <Panel className="overflow-hidden">
+          <PanelHead title="Saved scenarios" subtitle="Applied scenarios are the plan committed to the network" />
           {simulations.length === 0 ? (
             <EmptyState
-              icon={Beaker}
               title="No saved scenarios"
               description="Save a scenario from the Simulation Studio to keep its exact strategy mix and results."
             />
           ) : (
-            <div className="divide-y divide-white/[0.04]">
+            <div className="divide-y divide-white/[0.045]">
               {simulations.map((s) => (
-                <div key={s._id} className="flex flex-col gap-3 px-4 py-3.5 transition-colors hover:bg-white/[0.03] lg:flex-row lg:items-center">
-                  <div className="flex min-w-0 flex-1 items-center gap-3.5">
-                    <div
-                      className={cx(
-                        'grid h-9 w-9 shrink-0 place-items-center rounded-lg border',
-                        s.status === 'applied'
-                          ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
-                          : 'border-white/[0.08] bg-white/[0.04] text-slate-400'
+                <div key={s._id} className="row-hover flex flex-col gap-3 px-5 py-3.5 lg:flex-row lg:items-center">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                      <p className="truncate text-[13px] text-bone-100">{s.name}</p>
+                      {s.status === 'applied' && (
+                        <span className="inline-flex items-center gap-1.5 text-2xs text-flow-free">
+                          <span className="h-1.5 w-1.5 rounded-full bg-flow-free" />
+                          Applied
+                        </span>
                       )}
-                    >
-                      {s.status === 'applied' ? <BadgeCheck className="h-4 w-4" /> : <Beaker className="h-4 w-4" />}
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-sm font-medium text-slate-200">{s.name}</p>
-                        {s.status === 'applied' && (
-                          <span className="chip bg-emerald-500/12 text-emerald-300">Applied</span>
-                        )}
-                      </div>
-                      <p className="tnum mt-0.5 truncate text-[11px] text-slate-500">
-                        {s.createdByName} · {dateLabel(s.createdAt)} · {s.selections.length} strateg
-                        {s.selections.length === 1 ? 'y' : 'ies'} · {s.windowId === 'morning' ? '09–12' : '16–19'}
-                      </p>
-                    </div>
+                    <p className="tnum mt-1 truncate text-2xs text-ink-600">
+                      {s.createdByName} · {dateLabel(s.createdAt)} · {s.selections.length} strateg
+                      {s.selections.length === 1 ? 'y' : 'ies'} · {s.windowId === 'morning' ? '09–12' : '16–19'}
+                    </p>
                   </div>
 
-                  <div className="flex shrink-0 flex-wrap items-center gap-4 pl-12 lg:pl-0">
-                    <Metric label="Delay" delta={s.summary?.vehicleDelayPct} goodWhenNegative />
-                    <Metric label="Speed" delta={s.summary?.avgSpeedPct} />
+                  <div className="flex shrink-0 flex-wrap items-baseline gap-x-6 gap-y-2">
+                    <Stat label="Delay" delta={s.summary?.vehicleDelayPct} goodWhenNegative />
+                    <Stat label="Speed" delta={s.summary?.avgSpeedPct} />
                     <div className="text-right">
-                      <p className="text-[9px] uppercase tracking-wider text-slate-600">Capex</p>
-                      <p className="tnum text-[11px] font-semibold text-slate-300">{lakh(s.summary?.capexLakh)}</p>
+                      <p className="label">Capex</p>
+                      <p className="tnum mt-1 text-2xs text-bone-200">{lakh(s.summary?.capexLakh)}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-[9px] uppercase tracking-wider text-slate-600">Payback</p>
-                      <p className="tnum text-[11px] font-semibold text-slate-300">
+                      <p className="label">Payback</p>
+                      <p className="tnum mt-1 text-2xs text-bone-200">
                         {s.summary?.paybackMonths != null ? `${num(s.summary.paybackMonths, 1)} mo` : '—'}
                       </p>
                     </div>
-                    <button type="button" onClick={() => generateFrom(s)} className="btn-ghost !py-1.5 !text-xs">
-                      <FileText className="h-3.5 w-3.5" />
-                      Report
+                    <button type="button" onClick={() => generateFrom(s)} className="btn-quiet">
+                      Generate report
                     </button>
                     {canApply && (
                       <button
                         type="button"
                         onClick={() => removeSimulation(s)}
-                        className="rounded p-1.5 text-slate-600 transition-colors hover:text-rose-400"
+                        className="rounded p-1.5 text-ink-600 transition-colors hover:text-flow-severe"
                         aria-label="Delete scenario"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-3 w-3" />
                       </button>
                     )}
                   </div>
@@ -226,22 +207,17 @@ export default function Reports() {
           )}
         </Panel>
       )}
-
-      {!loading && tab === 'scenarios' && simulations.length > 0 && (
-        <p className="flex items-center gap-2 px-1 text-[11px] text-slate-600">
-          <TriangleAlert className="h-3 w-3" />
-          Applied scenarios represent the plan currently committed to the network.
-        </p>
-      )}
     </div>
   );
 }
 
-function Metric({ label, delta, goodWhenNegative }) {
+function Stat({ label, delta, goodWhenNegative }) {
   return (
     <div className="text-right">
-      <p className="text-[9px] uppercase tracking-wider text-slate-600">{label}</p>
-      <DeltaPill value={delta} goodWhenNegative={goodWhenNegative} />
+      <p className="label">{label}</p>
+      <div className="mt-1">
+        <DeltaPill value={delta} goodWhenNegative={goodWhenNegative} />
+      </div>
     </div>
   );
 }

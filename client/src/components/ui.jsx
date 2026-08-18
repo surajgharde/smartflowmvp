@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Info, Loader2, X } from 'lucide-react';
-import { STATUS, LOS_COLOR, AUTHORITY_COLOR } from '../lib/theme.js';
+import { AlertTriangle, Check, Info, Loader2, X } from 'lucide-react';
+import { STATUS, LOS_COLOR, AUTHORITY_COLOR, vcColor } from '../lib/theme.js';
 import { num, pct } from '../lib/format.js';
 
 export function cx(...parts) {
@@ -17,76 +17,86 @@ export function Panel({ className, children, ...rest }) {
   );
 }
 
-export function PanelHead({ title, subtitle, icon: Icon, actions, className }) {
+/**
+ * Panel header. Title in sentence case at body weight — an icon and an uppercase
+ * caption on every single container is what makes a dashboard read as generated.
+ * The caption sits inline, dimmed, as an aside.
+ */
+export function PanelHead({ title, subtitle, actions, className }) {
   return (
     <header className={cx('panel-head', className)}>
-      <div className="flex min-w-0 items-center gap-2.5">
-        {Icon && <Icon className="h-4 w-4 shrink-0 text-brand-400" strokeWidth={2} />}
-        <div className="min-w-0">
-          <h2 className="panel-title truncate">{title}</h2>
-          {subtitle && <p className="mt-0.5 truncate text-xs text-slate-500">{subtitle}</p>}
-        </div>
+      <div className="min-w-0">
+        <h2 className="truncate text-[13px] font-semibold text-bone-100">{title}</h2>
+        {subtitle && <p className="mt-1 truncate text-2xs text-ink-500">{subtitle}</p>}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </header>
   );
 }
 
+/** Section divider with a label — used to break long pages without adding boxes. */
+export function SectionLabel({ children, className, actions }) {
+  return (
+    <div className={cx('flex items-center gap-4', className)}>
+      <span className="label shrink-0">{children}</span>
+      <span className="h-px flex-1 bg-white/[0.07]" />
+      {actions}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------- stats */
 
 /**
- * Headline metric. `delta` is a signed percentage; `goodWhenNegative` flips the
- * colour so "delay down 22%" reads as good and "delay up 22%" reads as bad.
+ * Compact metric. Sits in a ruled strip rather than its own card — a row of
+ * identically-weighted cards flattens hierarchy and is the most recognisable
+ * template layout there is.
  */
-export function StatTile({
-  label,
-  value,
-  unit,
-  delta,
-  goodWhenNegative = false,
-  icon: Icon,
-  hint,
-  tone = 'default',
-  className,
-}) {
-  const toneRing = {
-    default: 'border-white/[0.07]',
-    brand: 'border-brand-500/30 bg-brand-500/[0.04]',
-    warn: 'border-amber-500/25 bg-amber-500/[0.04]',
-    danger: 'border-rose-500/25 bg-rose-500/[0.04]',
-    good: 'border-emerald-500/25 bg-emerald-500/[0.04]',
-  }[tone];
-
+export function Metric({ label, value, unit, delta, goodWhenNegative, hint, accent, className }) {
   return (
-    <div className={cx('rounded-xl border bg-ink-900/70 p-4 shadow-panel', toneRing, className)}>
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">{label}</p>
-        {Icon && <Icon className="h-4 w-4 shrink-0 text-slate-600" strokeWidth={2} />}
-      </div>
+    <div className={cx('min-w-0 px-5 py-4', className)}>
+      <p className="label truncate">{label}</p>
       <div className="mt-2 flex items-baseline gap-1.5">
-        <span className="tnum text-2xl font-semibold tracking-tight text-white">{value}</span>
-        {unit && <span className="text-xs font-medium text-slate-500">{unit}</span>}
+        <span
+          className="tnum truncate text-[26px] font-medium leading-none text-bone-50"
+          style={accent ? { color: accent } : undefined}
+        >
+          {value}
+        </span>
+        {unit && <span className="shrink-0 text-2xs text-ink-500">{unit}</span>}
       </div>
-      <div className="mt-1.5 flex items-center gap-2">
+      <div className="mt-2 flex items-center gap-2">
         {delta != null && <DeltaPill value={delta} goodWhenNegative={goodWhenNegative} />}
-        {hint && <span className="truncate text-[11px] text-slate-500">{hint}</span>}
+        {hint && <span className="truncate text-2xs text-ink-500">{hint}</span>}
       </div>
+    </div>
+  );
+}
+
+/** A row of Metrics separated by hairlines instead of gaps between cards. */
+export function MetricStrip({ children, className }) {
+  return (
+    <div
+      className={cx(
+        'panel grid divide-y divide-white/[0.07] sm:grid-cols-2 sm:divide-y-0',
+        'lg:grid-cols-3 xl:grid-cols-5 [&>*]:border-white/[0.07]',
+        'sm:[&>*:not(:first-child)]:border-l',
+        className
+      )}
+    >
+      {children}
     </div>
   );
 }
 
 export function DeltaPill({ value, goodWhenNegative = false, suffix = '%', className }) {
   if (value == null || Number.isNaN(value)) return null;
-  const neutral = Math.abs(value) < 0.05;
+  const flat = Math.abs(value) < 0.05;
   const good = goodWhenNegative ? value < 0 : value > 0;
-  const tone = neutral
-    ? 'bg-white/[0.06] text-slate-400'
-    : good
-      ? 'bg-emerald-500/12 text-emerald-300'
-      : 'bg-rose-500/12 text-rose-300';
+  const tone = flat ? 'text-ink-500' : good ? 'text-flow-free' : 'text-flow-severe';
   return (
-    <span className={cx('chip tnum', tone, className)}>
-      {neutral ? '±0' : `${value > 0 ? '+' : ''}${num(value, 1)}`}
+    <span className={cx('tnum text-2xs font-medium', tone, className)}>
+      {flat ? '±0' : `${value > 0 ? '↑' : '↓'}${num(Math.abs(value), 1)}`}
       {suffix}
     </span>
   );
@@ -97,8 +107,8 @@ export function DeltaPill({ value, goodWhenNegative = false, suffix = '%', class
 export function StatusBadge({ status, className }) {
   const s = STATUS[status] || STATUS.free;
   return (
-    <span className={cx('chip', s.bg, s.text, className)}>
-      <span className={cx('h-1.5 w-1.5 rounded-full', s.dot)} />
+    <span className={cx('inline-flex items-center gap-1.5 text-2xs text-bone-300', className)}>
+      <span className={cx('h-1.5 w-1.5 shrink-0 rounded-full', s.dot)} />
       {s.label}
     </span>
   );
@@ -107,24 +117,25 @@ export function StatusBadge({ status, className }) {
 export function LosBadge({ los, className }) {
   return (
     <span
-      className={cx('chip tnum', className)}
+      className={cx('tnum inline-flex h-5 w-5 items-center justify-center rounded text-[11px] font-semibold', className)}
       style={{ background: `${LOS_COLOR[los]}1f`, color: LOS_COLOR[los] }}
       title={`Level of Service ${los}`}
     >
-      LOS {los}
+      {los}
     </span>
   );
 }
 
 export function AuthorityTag({ code, className, title }) {
-  const color = AUTHORITY_COLOR[code] || '#94a3b8';
+  if (!code) return null;
+  const color = AUTHORITY_COLOR[code] || '#7d766b';
   return (
     <span
-      className={cx('chip', className)}
-      style={{ background: `${color}1a`, color }}
+      className={cx('inline-flex items-center gap-1 text-2xs font-medium', className)}
       title={title || code}
     >
-      {code}
+      <span className="h-1.5 w-1.5 shrink-0 rounded-[1px]" style={{ background: color }} />
+      <span style={{ color }}>{code}</span>
     </span>
   );
 }
@@ -132,9 +143,12 @@ export function AuthorityTag({ code, className, title }) {
 /* --------------------------------------------------------------- controls */
 
 export function Segmented({ options, value, onChange, className, size = 'md' }) {
-  const pad = size === 'sm' ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1.5 text-xs';
+  const pad = size === 'sm' ? 'px-2.5 py-1 text-2xs' : 'px-3 py-1.5 text-xs';
   return (
-    <div className={cx('inline-flex rounded-lg border border-white/10 bg-ink-950/60 p-0.5', className)}>
+    <div
+      className={cx('inline-flex rounded-md bg-ink-850 p-0.5', className)}
+      style={{ boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.07)' }}
+    >
       {options.map((opt) => {
         const active = opt.value === value;
         return (
@@ -143,9 +157,9 @@ export function Segmented({ options, value, onChange, className, size = 'md' }) 
             type="button"
             onClick={() => onChange(opt.value)}
             className={cx(
-              'rounded-md font-medium transition-colors',
+              'rounded-[5px] font-medium transition-colors',
               pad,
-              active ? 'bg-brand-500 text-ink-950' : 'text-slate-400 hover:text-slate-200'
+              active ? 'bg-bone-100 text-ink-950' : 'text-ink-500 hover:text-bone-200'
             )}
           >
             {opt.label}
@@ -159,9 +173,9 @@ export function Segmented({ options, value, onChange, className, size = 'md' }) 
 export function Slider({ label, value, onChange, min = 0.1, max = 1, step = 0.05, format }) {
   return (
     <label className="block">
-      <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</span>
-        <span className="tnum text-xs font-semibold text-brand-300">
+      <div className="mb-2 flex items-baseline justify-between">
+        <span className="label">{label}</span>
+        <span className="tnum text-xs font-medium text-bone-100">
           {format ? format(value) : `${Math.round(value * 100)}%`}
         </span>
       </div>
@@ -172,43 +186,50 @@ export function Slider({ label, value, onChange, min = 0.1, max = 1, step = 0.05
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/10
-          [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5
-          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full
-          [&::-webkit-slider-thumb]:bg-brand-400 [&::-webkit-slider-thumb]:shadow-glow
-          [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full
-          [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-brand-400"
+        className="range"
       />
     </label>
+  );
+}
+
+export function Checkbox({ checked, className }) {
+  return (
+    <span
+      className={cx(
+        'grid h-[15px] w-[15px] shrink-0 place-items-center rounded-[3px] transition-colors',
+        checked ? 'bg-bone-100' : 'bg-white/[0.06]',
+        className
+      )}
+      style={checked ? undefined : { boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.14)' }}
+    >
+      {checked && <Check className="h-2.5 w-2.5 text-ink-950" strokeWidth={3.5} />}
+    </span>
   );
 }
 
 /* ------------------------------------------------------------ status views */
 
 export function Spinner({ className }) {
-  return <Loader2 className={cx('h-4 w-4 animate-spin', className)} />;
+  return <Loader2 className={cx('h-3.5 w-3.5 animate-spin', className)} />;
 }
 
 export function Loading({ label = 'Loading', className }) {
   return (
-    <div className={cx('flex items-center justify-center gap-2.5 py-14 text-sm text-slate-500', className)}>
-      <Spinner className="text-brand-400" />
+    <div className={cx('flex items-center justify-center gap-2.5 py-16 text-xs text-ink-500', className)}>
+      <Spinner />
       {label}…
     </div>
   );
 }
 
-export function EmptyState({ icon: Icon, title, description, action, className }) {
+export function EmptyState({ title, description, action, className }) {
   return (
-    <div className={cx('flex flex-col items-center justify-center px-6 py-14 text-center', className)}>
-      {Icon && (
-        <div className="mb-3 rounded-xl border border-white/[0.07] bg-white/[0.03] p-3">
-          <Icon className="h-5 w-5 text-slate-500" strokeWidth={1.75} />
-        </div>
+    <div className={cx('px-6 py-16 text-center', className)}>
+      <p className="text-sm font-medium text-bone-200">{title}</p>
+      {description && (
+        <p className="mx-auto mt-1.5 max-w-sm text-xs leading-relaxed text-ink-500">{description}</p>
       )}
-      <p className="text-sm font-medium text-slate-300">{title}</p>
-      {description && <p className="mt-1 max-w-sm text-xs leading-relaxed text-slate-500">{description}</p>}
-      {action && <div className="mt-4">{action}</div>}
+      {action && <div className="mt-5 flex justify-center">{action}</div>}
     </div>
   );
 }
@@ -218,13 +239,13 @@ export function ErrorNote({ children, className }) {
   return (
     <div
       className={cx(
-        'flex items-start gap-2 rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-2.5 text-xs text-rose-200',
+        'flex items-start gap-2.5 rounded-md bg-flow-severe/[0.09] px-3.5 py-3 text-xs text-flow-severe',
         className
       )}
       role="alert"
     >
-      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-      <span>{children}</span>
+      <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+      <span className="leading-relaxed">{children}</span>
     </div>
   );
 }
@@ -239,7 +260,7 @@ export function ToastProvider({ children }) {
   const push = useCallback((message, kind = 'info') => {
     const id = Math.random().toString(36).slice(2);
     setToasts((t) => [...t, { id, message, kind }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4200);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4400);
   }, []);
 
   const value = useMemo(
@@ -251,34 +272,27 @@ export function ToastProvider({ children }) {
     [push]
   );
 
-  const ICON = { success: CheckCircle2, error: AlertTriangle, info: Info };
-  const TONE = {
-    success: 'border-emerald-500/30 bg-emerald-500/[0.12] text-emerald-100',
-    error: 'border-rose-500/30 bg-rose-500/[0.12] text-rose-100',
-    info: 'border-brand-500/30 bg-brand-500/[0.12] text-brand-50',
-  };
+  const ACCENT = { success: '#4ade80', error: '#f87171', info: '#c9c3b9' };
+  const ICON = { success: Check, error: AlertTriangle, info: Info };
 
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed bottom-5 right-5 z-[1200] flex w-[min(22rem,calc(100vw-2.5rem))] flex-col gap-2">
+      <div className="pointer-events-none fixed bottom-5 right-5 z-[1200] flex w-[min(21rem,calc(100vw-2.5rem))] flex-col gap-2">
         {toasts.map((t) => {
           const Icon = ICON[t.kind];
           return (
             <div
               key={t.id}
-              className={cx(
-                'pointer-events-auto flex animate-riseIn items-start gap-2.5 rounded-lg border px-3.5 py-3 text-xs backdrop-blur-md shadow-panel',
-                TONE[t.kind]
-              )}
+              className="pointer-events-auto flex animate-riseIn items-start gap-2.5 rounded-md bg-ink-800 px-3.5 py-3 text-xs text-bone-100 shadow-lift"
               role="status"
             >
-              <Icon className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+              <Icon className="mt-px h-3.5 w-3.5 shrink-0" strokeWidth={2.25} style={{ color: ACCENT[t.kind] }} />
               <span className="flex-1 leading-relaxed">{t.message}</span>
               <button
                 type="button"
                 onClick={() => setToasts((list) => list.filter((x) => x.id !== t.id))}
-                className="shrink-0 opacity-50 transition-opacity hover:opacity-100"
+                className="shrink-0 text-ink-500 transition-colors hover:text-bone-200"
                 aria-label="Dismiss"
               >
                 <X className="h-3.5 w-3.5" />
@@ -299,27 +313,44 @@ export function useToast() {
 
 /* ------------------------------------------------------------------- misc */
 
-/** Horizontal saturation meter used in corridor tables. */
-export function VcMeter({ vc, className }) {
+/**
+ * Saturation meter. The track carries a tick at v/c = 1.0 so "over capacity" is
+ * visible as a position, not only as a colour change.
+ */
+export function VcMeter({ vc, className, showValue = true }) {
   const width = Math.min(100, (vc / 1.3) * 100);
-  const color = vc >= 1 ? STATUS.severe.color : vc >= 0.85 ? STATUS.heavy.color : vc >= 0.7 ? STATUS.moderate.color : STATUS.free.color;
   return (
-    <div className={cx('flex items-center gap-2', className)}>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.07]">
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${width}%`, background: color }} />
+    <div className={cx('flex items-center gap-2.5', className)}>
+      <div className="relative h-[3px] w-full rounded-full bg-white/[0.07]">
+        <div
+          className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-500"
+          style={{ width: `${width}%`, background: vcColor(vc) }}
+        />
+        <span className="absolute -top-0.5 bottom-[-2px] w-px bg-white/25" style={{ left: `${(1 / 1.3) * 100}%` }} />
       </div>
-      <span className="tnum w-10 shrink-0 text-right text-[11px] text-slate-400">{num(vc, 2)}</span>
+      {showValue && (
+        <span className="tnum w-9 shrink-0 text-right text-2xs text-bone-400">{num(vc, 2)}</span>
+      )}
     </div>
   );
 }
 
-/** Live pulse dot for the monitoring header. */
 export function LiveDot({ className }) {
   return (
-    <span className={cx('relative flex h-2 w-2', className)}>
-      <span className="absolute inline-flex h-full w-full animate-pulseRing rounded-full bg-emerald-400" />
-      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+    <span className={cx('relative flex h-1.5 w-1.5', className)}>
+      <span className="absolute inline-flex h-full w-full animate-pulseRing rounded-full bg-flow-free" />
+      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-flow-free" />
     </span>
+  );
+}
+
+/** Thin inline bar for comparing a value against a row maximum, used in tables. */
+export function Bar({ value, max, color, className }) {
+  const w = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  return (
+    <div className={cx('h-[3px] w-full rounded-full bg-white/[0.06]', className)}>
+      <div className="h-full rounded-full" style={{ width: `${w}%`, background: color || '#7d766b' }} />
+    </div>
   );
 }
 

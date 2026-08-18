@@ -32,19 +32,44 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
 
+/**
+ * Strip credentials out of a connection string before it is logged. The console
+ * ends up in terminals, CI logs and on a projector during a demo — none of which
+ * should ever see the database password.
+ */
+function redactUri(uri) {
+  return String(uri).replace(/\/\/[^@/]+@/, '//***:***@');
+}
+
 async function start() {
   try {
     await connectDb();
-    console.log(`[smartflow] MongoDB connected → ${config.mongoUri}`);
+    console.log(`[smartflow] MongoDB connected → ${redactUri(config.mongoUri)}`);
   } catch (err) {
-    console.error('\n[smartflow] Could not reach MongoDB at', config.mongoUri);
+    console.error('\n[smartflow] Could not reach MongoDB at', redactUri(config.mongoUri));
     console.error('[smartflow] Start MongoDB, then run `npm run seed` and try again.\n');
     console.error(err.message);
     process.exit(1);
   }
 
-  app.listen(config.port, () => {
+  const server = app.listen(config.port, () => {
     console.log(`[smartflow] API listening on http://localhost:${config.port}`);
+  });
+
+  // Without this, a port clash surfaces as an unhandled 'error' event and a stack
+  // trace. During a demo the useful thing to see is how to free the port.
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\n[smartflow] Port ${config.port} is already in use.`);
+      console.error('[smartflow] Another SmartFlow server is probably still running.');
+      console.error('[smartflow] Free it with:');
+      console.error(`[smartflow]   Windows  npx kill-port ${config.port}`);
+      console.error(`[smartflow]   macOS/Linux  lsof -ti:${config.port} | xargs kill`);
+      console.error(`[smartflow] Or set a different PORT in server/.env\n`);
+    } else {
+      console.error('[smartflow] Server failed to start:', err.message);
+    }
+    process.exit(1);
   });
 }
 

@@ -10,23 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import * as Icons from 'lucide-react';
-import {
-  BrainCircuit,
-  Check,
-  ChevronRight,
-  CircleSlash,
-  Gauge,
-  IndianRupee,
-  Layers,
-  Play,
-  RotateCcw,
-  Save,
-  Search,
-  Sparkles,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { ArrowRight, Play, Search, Trash2, X } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { useAppData } from '../lib/appData.jsx';
 import { useScenario } from '../lib/scenario.jsx';
@@ -34,6 +18,7 @@ import PageHeader from '../components/PageHeader.jsx';
 import FlowLane from '../components/FlowLane.jsx';
 import {
   AuthorityTag,
+  Checkbox,
   DeltaPill,
   EmptyState,
   ErrorNote,
@@ -42,13 +27,12 @@ import {
   Segmented,
   Slider,
   Spinner,
-  StatTile,
   VcMeter,
   cx,
   useToast,
 } from '../components/ui.jsx';
-import { CHART_AXIS, CHART_GRID, tooltipStyle, vcColor } from '../lib/theme.js';
-import { compact, hourLabel, inr, lakh, num } from '../lib/format.js';
+import { CHART_AXIS, CHART_GRID, SERIES, tooltipStyle, vcColor } from '../lib/theme.js';
+import { compact, lakh, num } from '../lib/format.js';
 
 /** ~180 ms per 15-minute step: a 3-hour window replays in about two seconds. */
 const PLAYBACK_MS = 180;
@@ -82,18 +66,12 @@ export default function SimulationStudio() {
 
   const peakHour = windowId === 'morning' ? 9 : 18;
 
-  // Baseline saturation drives corridor ordering and the "before" flow lanes.
   useEffect(() => {
     api
       .state({ hour: peakHour })
       .then(setBaseline)
       .catch((err) => setError(err.message));
   }, [peakHour]);
-
-  // Arriving from the map with a corridor in hand: pre-target it.
-  useEffect(() => {
-    if (focusCorridor) setOpenPicker(null);
-  }, [focusCorridor]);
 
   useEffect(() => () => clearInterval(playRef.current), []);
 
@@ -117,6 +95,13 @@ export default function SimulationStudio() {
     [selections]
   );
 
+  // Arriving from the map with a corridor in hand: open a strategy it qualifies for.
+  useEffect(() => {
+    if (!focusCorridor || !strategies.length) return;
+    const match = strategies.find((s) => (eligibility[s.id] || []).includes(focusCorridor));
+    if (match) setOpenPicker(match.id);
+  }, [focusCorridor, strategies, eligibility]);
+
   async function run() {
     if (!selections.length) {
       toast.error('Add at least one strategy before running the simulation');
@@ -132,8 +117,7 @@ export default function SimulationStudio() {
       const res = await api.run({ windowId, selections });
       setResult(res);
 
-      // Play the simulated window back step by step. This is the real timeline
-      // the model produced, not a decorative loading bar.
+      // Play back the timeline the model actually produced, step by step.
       const total = res.after.timeline.length;
       let i = 0;
       setPlayhead(0);
@@ -182,29 +166,29 @@ export default function SimulationStudio() {
     if (!result) return [];
     return result.before.timeline.map((b, i) => ({
       label: b.label,
-      before: b.congestionIndex,
-      after: result.after.timeline[i]?.congestionIndex,
+      baseline: b.congestionIndex,
+      treatment: result.after.timeline[i]?.congestionIndex,
     }));
   }, [result]);
 
   return (
-    <div className="space-y-5 p-4 sm:p-6">
+    <div className="space-y-6 p-5 sm:p-7">
       <PageHeader
         step={3}
         title="Simulation studio"
-        subtitle="Compose a traffic management strategy, target the corridors it should apply to, and run it against the model before anything is deployed on the ground."
+        subtitle="Compose a management strategy, target the corridors it applies to, and run it against the model before anything is deployed on the ground."
         actions={
           <>
             <Segmented
               value={windowId}
               onChange={setWindowId}
+              size="sm"
               options={[
                 { value: 'morning', label: 'Morning 09–12' },
                 { value: 'evening', label: 'Evening 16–19' },
               ]}
             />
-            <button type="button" onClick={clear} disabled={!selections.length} className="btn-ghost !py-2 !text-xs">
-              <RotateCcw className="h-3.5 w-3.5" />
+            <button type="button" onClick={clear} disabled={!selections.length} className="btn-quiet">
               Reset
             </button>
           </>
@@ -213,71 +197,56 @@ export default function SimulationStudio() {
 
       <ErrorNote>{error}</ErrorNote>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_23rem]">
-        {/* ------------------------------------------------- strategy library */}
-        <div className="space-y-5">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
+        <div className="space-y-6">
+          {/* ---------------------------------------------- strategy library */}
           <Panel>
             <PanelHead
               title="Strategy library"
               subtitle="Eight interventions a Nagpur authority could actually fund"
-              icon={Layers}
-              actions={
-                <span className="tnum chip bg-white/[0.06] text-slate-400">
-                  {selections.length} active
-                </span>
-              }
+              actions={<span className="tnum text-2xs text-ink-500">{selections.length} active</span>}
             />
-            <div className="grid gap-2.5 p-4 sm:grid-cols-2">
+            {/*
+              Cell rules come from responsive utilities rather than index maths, so
+              the grid reads correctly at one column as well as two.
+            */}
+            <div className="grid sm:grid-cols-2">
               {strategies.map((s) => {
-                const active = !!selectionById[s.id];
-                const Icon = Icons[s.icon] || Sparkles;
+                const sel = selectionById[s.id];
+                const active = !!sel;
                 return (
                   <button
                     key={s.id}
                     type="button"
                     onClick={() => setOpenPicker(openPicker === s.id ? null : s.id)}
                     className={cx(
-                      'group rounded-xl border p-3.5 text-left transition-all',
-                      active
-                        ? 'border-brand-500/45 bg-brand-500/[0.08]'
-                        : 'border-white/[0.07] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]'
+                      'row-hover group relative border-b border-white/[0.07] px-5 py-4 text-left transition-colors',
+                      'sm:[&:nth-child(odd)]:border-r sm:[&:nth-last-child(-n+2)]:border-b-0',
+                      'last:border-b-0',
+                      active && 'bg-white/[0.035]'
                     )}
                   >
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={cx(
-                          'grid h-9 w-9 shrink-0 place-items-center rounded-lg border transition-colors',
-                          active
-                            ? 'border-brand-500/40 bg-brand-500/15 text-brand-300'
-                            : 'border-white/[0.08] bg-white/[0.04] text-slate-400 group-hover:text-brand-300'
-                        )}
-                      >
-                        <Icon className="h-4 w-4" strokeWidth={2} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="truncate text-sm font-semibold text-slate-100">{s.name}</p>
-                          {active && <Check className="h-3.5 w-3.5 shrink-0 text-brand-400" strokeWidth={3} />}
-                        </div>
-                        <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500">{s.tagline}</p>
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                          <span className="chip bg-white/[0.06] text-slate-400">{s.category}</span>
-                          <span className="chip bg-white/[0.06] text-slate-500">{s.deployDays}d lead</span>
-                          {active && (
-                            <span className="tnum chip bg-brand-500/15 text-brand-300">
-                              {selectionById[s.id].corridorCodes.length} corridors
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                    {active && <span className="absolute left-0 top-0 h-full w-[2px] bg-bone-100" />}
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className={cx('text-[13px]', active ? 'font-medium text-bone-50' : 'text-bone-200')}>
+                        {s.name}
+                      </p>
+                      {active && (
+                        <span className="tnum shrink-0 text-2xs text-bone-400">
+                          {sel.corridorCodes.length} · {Math.round(sel.intensity * 100)}%
+                        </span>
+                      )}
                     </div>
+                    <p className="mt-1.5 text-2xs leading-relaxed text-ink-500">{s.tagline}</p>
+                    <p className="tnum mt-2.5 text-[10px] text-ink-600">
+                      {s.category} · {s.deployDays}d lead time
+                    </p>
                   </button>
                 );
               })}
             </div>
           </Panel>
 
-          {/* Corridor picker for the strategy being configured */}
           {openPicker && (
             <CorridorPicker
               strategy={strategies.find((s) => s.id === openPicker)}
@@ -297,95 +266,85 @@ export default function SimulationStudio() {
             />
           )}
 
-          {/* --------------------------------------------- run + playback */}
+          {/* -------------------------------------------- run + playback */}
           {result && (
             <Panel>
               <PanelHead
-                title={playing ? 'Playing back simulated window' : 'Simulation result'}
+                title={playing ? `Replaying ${frame?.label}` : 'Simulation result'}
                 subtitle={
                   playing
-                    ? `${frame?.label} — stepping through ${result.window.label.toLowerCase()}`
+                    ? `Stepping through ${result.window.label.toLowerCase()} at 15-minute resolution`
                     : `Solved in ${result.computeMs} ms across ${result.after.timeline.length} time steps`
                 }
-                icon={Gauge}
                 actions={
                   <button type="button" onClick={() => navigate('/results')} className="btn-primary !py-1.5 !text-xs">
                     Full comparison
-                    <ChevronRight className="h-3.5 w-3.5" />
+                    <ArrowRight className="h-3 w-3" strokeWidth={2.25} />
                   </button>
                 }
               />
 
-              <div className="space-y-4 p-4">
-                {/* playback scrubber */}
+              <div className="space-y-5 p-5">
                 <div>
-                  <div className="mb-1.5 flex items-center justify-between text-[10px] text-slate-500">
-                    <span className="tnum">{result.before.timeline[0]?.label}</span>
-                    <span className="tnum font-semibold text-brand-300">{frame?.label}</span>
-                    <span className="tnum">{result.before.timeline.at(-1)?.label}</span>
+                  <div className="tnum mb-2 flex items-baseline justify-between text-2xs text-ink-600">
+                    <span>{result.before.timeline[0]?.label}</span>
+                    <span className="text-bone-100">{frame?.label}</span>
+                    <span>{result.before.timeline.at(-1)?.label}</span>
                   </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
+                  <div className="h-[3px] overflow-hidden rounded-full bg-white/[0.07]">
                     <div
-                      className={cx('h-full rounded-full bg-brand-400 transition-[width] duration-150', playing && 'stripe')}
-                      style={{
-                        width: `${(((playhead ?? 0) + 1) / result.after.timeline.length) * 100}%`,
-                      }}
+                      className="h-full rounded-full bg-bone-100 transition-[width] duration-150"
+                      style={{ width: `${(((playhead ?? 0) + 1) / result.after.timeline.length) * 100}%` }}
                     />
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-4">
-                  <StatTile
-                    label="Congestion index"
-                    value={num(frame?.congestionIndex, 1)}
-                    unit={`vs ${num(frameBefore?.congestionIndex, 1)}`}
-                    tone="brand"
-                  />
-                  <StatTile label="Network speed" value={num(frame?.avgSpeed, 1)} unit="km/h" />
-                  <StatTile label="Delay this step" value={compact(frame?.delayHours)} unit="veh-hr" />
-                  <StatTile label="Corridors congested" value={`${frame?.congestedCorridors ?? 0}`} unit={`of ${corridors.length}`} />
+                <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+                  <PlaybackStat label="Congestion index" value={num(frame?.congestionIndex, 1)} was={num(frameBefore?.congestionIndex, 1)} />
+                  <PlaybackStat label="Network speed" value={`${num(frame?.avgSpeed, 1)}`} was={`${num(frameBefore?.avgSpeed, 1)}`} unit="km/h" />
+                  <PlaybackStat label="Delay this step" value={compact(frame?.delayHours)} was={compact(frameBefore?.delayHours)} unit="veh-hr" />
+                  <PlaybackStat label="Congested" value={`${frame?.congestedCorridors ?? 0}`} was={`${frameBefore?.congestedCorridors ?? 0}`} unit={`of ${corridors.length}`} />
                 </div>
 
-                <div className="h-[190px]">
+                <div className="h-[172px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={timelineData} margin={{ top: 6, right: 8, left: -24, bottom: 0 }}>
+                    <LineChart data={timelineData} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
                       <CartesianGrid stroke={CHART_GRID} vertical={false} />
-                      <XAxis dataKey="label" stroke={CHART_AXIS} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-                      <YAxis stroke={CHART_AXIS} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={40} />
-                      <Tooltip {...tooltipStyle} formatter={(v, n) => [num(v, 1), n === 'before' ? 'Do nothing' : 'With strategy']} />
-                      {frame && <ReferenceLine x={frame.label} stroke="#22d3ee" strokeWidth={1.5} />}
-                      <Line type="monotone" dataKey="before" name="before" stroke="#fb7185" strokeWidth={2} dot={false} strokeDasharray="4 3" />
-                      <Line type="monotone" dataKey="after" name="after" stroke="#22d3ee" strokeWidth={2.5} dot={false} />
+                      <XAxis dataKey="label" stroke={CHART_AXIS} tick={{ fontSize: 9, fontFamily: '"IBM Plex Mono", monospace' }} tickLine={false} axisLine={false} />
+                      <YAxis stroke={CHART_AXIS} tick={{ fontSize: 9, fontFamily: '"IBM Plex Mono", monospace' }} tickLine={false} axisLine={false} width={30} />
+                      <Tooltip {...tooltipStyle} formatter={(v, n) => [num(v, 1), n === 'baseline' ? 'Do nothing' : 'With strategy']} />
+                      {frame && <ReferenceLine x={frame.label} stroke="#e2ded7" strokeWidth={1} strokeDasharray="3 3" />}
+                      <Line type="monotone" dataKey="baseline" name="baseline" stroke={SERIES.baseline} strokeWidth={1.5} dot={false} strokeDasharray="4 3" />
+                      <Line type="monotone" dataKey="treatment" name="treatment" stroke={SERIES.treatment} strokeWidth={2} dot={false} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="flex items-center justify-center gap-5 text-[10px] text-slate-500">
+                <div className="flex items-center justify-center gap-6 text-2xs text-ink-500">
                   <span className="flex items-center gap-1.5">
-                    <span className="h-0.5 w-4 rounded-full bg-rose-400" /> Do nothing
+                    <span className="h-px w-4" style={{ background: SERIES.baseline }} /> Do nothing
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="h-0.5 w-4 rounded-full bg-brand-400" /> With strategy
+                    <span className="h-[2px] w-4" style={{ background: SERIES.treatment }} /> With strategy
                   </span>
                 </div>
 
-                {/* Traffic flow visualisation on targeted corridors */}
                 {targetedCodes.length > 0 && (
-                  <div>
-                    <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  <div className="pt-1">
+                    <p className="label mb-3">
                       Traffic flow on targeted corridors — design hour {result.after.designHourLabel}
                     </p>
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {targetedCodes.slice(0, 4).map((code) => {
                         const row = result.comparison.find((c) => c.code === code);
                         if (!row) return null;
                         return (
                           <div key={code}>
-                            <div className="mb-1.5 flex items-center gap-2">
-                              <span className="text-xs font-semibold text-slate-200">{row.name}</span>
+                            <div className="mb-2 flex items-baseline gap-2.5">
+                              <span className="text-xs font-medium text-bone-100">{row.name}</span>
                               <AuthorityTag code={row.jurisdiction} />
                               <DeltaPill value={row.delta.speedPct} className="ml-auto" />
                             </div>
-                            <div className="grid gap-2 sm:grid-cols-2">
+                            <div className="grid gap-2.5 sm:grid-cols-2">
                               <FlowLane result={row.before} label="Do nothing" sublabel={`${num(row.before.delayMin, 1)} min delay`} />
                               <FlowLane result={row.after} label="With strategy" sublabel={`${num(row.after.delayMin, 1)} min delay`} />
                             </div>
@@ -400,93 +359,68 @@ export default function SimulationStudio() {
           )}
         </div>
 
-        {/* ----------------------------------------------------- scenario rail */}
-        <div className="space-y-5">
-          <Panel>
-            <PanelHead title="Scenario" subtitle={windowId === 'morning' ? '09:00 – 12:00' : '16:00 – 19:00'} icon={Layers} />
-            <div className="p-4">
+        {/* ---------------------------------------------------- scenario rail */}
+        <div className="space-y-6">
+          <Panel className="self-start">
+            <PanelHead title="Scenario" subtitle={windowId === 'morning' ? '09:00 – 12:00' : '16:00 – 19:00'} />
+            <div className="p-5">
               {selections.length === 0 ? (
                 <EmptyState
-                  icon={CircleSlash}
                   title="No strategies selected"
-                  description="Pick a strategy from the library and choose which corridors it applies to."
-                  className="!py-8"
+                  description="Pick one from the library and choose which corridors it applies to."
+                  className="!py-10 !px-0"
                 />
               ) : (
-                <div className="space-y-2">
+                <div className="divide-y divide-white/[0.06]">
                   {selections.map((sel) => {
                     const s = strategies.find((x) => x.id === sel.strategyId);
-                    const Icon = Icons[s?.icon] || Sparkles;
                     return (
-                      <div key={sel.strategyId} className="rounded-lg border border-white/[0.07] bg-white/[0.02] p-3">
-                        <div className="flex items-start gap-2.5">
-                          <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-400" strokeWidth={2} />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-semibold text-slate-200">{s?.name}</p>
-                            <p className="tnum mt-0.5 text-[10px] text-slate-500">
-                              {Math.round(sel.intensity * 100)}% intensity · {sel.corridorCodes.length} corridor
-                              {sel.corridorCodes.length === 1 ? '' : 's'}
-                            </p>
-                            <div className="mt-1.5 flex flex-wrap gap-1">
-                              {sel.corridorCodes.map((code) => (
-                                <span key={code} className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[9px] text-slate-400">
-                                  {corridorByCode[code]?.shortName || code}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeStrategy(sel.strategyId)}
-                            className="shrink-0 rounded p-1 text-slate-600 hover:text-rose-400"
-                            aria-label={`Remove ${s?.name}`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                      <div key={sel.strategyId} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-medium text-bone-100">{s?.name}</p>
+                          <p className="tnum mt-1 text-2xs text-ink-500">
+                            {Math.round(sel.intensity * 100)}% intensity
+                          </p>
+                          <p className="mt-1.5 text-2xs leading-relaxed text-ink-600">
+                            {sel.corridorCodes.map((c) => corridorByCode[c]?.shortName || c).join(' · ')}
+                          </p>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => removeStrategy(sel.strategyId)}
+                          className="shrink-0 rounded p-1 text-ink-600 hover:text-flow-severe"
+                          aria-label={`Remove ${s?.name}`}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
                       </div>
                     );
                   })}
                 </div>
               )}
 
-              <button
-                type="button"
-                onClick={run}
-                disabled={running || !selections.length}
-                className="btn-primary mt-4 w-full"
-              >
-                {running ? <Spinner /> : <Play className="h-4 w-4" strokeWidth={2.5} />}
+              <button type="button" onClick={run} disabled={running || !selections.length} className="btn-primary mt-5 w-full">
+                {running ? <Spinner /> : <Play className="h-3.5 w-3.5" strokeWidth={2.5} />}
                 {running ? 'Simulating…' : 'Run simulation'}
               </button>
 
               {result && (
-                <div className="mt-4 space-y-3 border-t border-white/[0.06] pt-4">
-                  <div className="grid grid-cols-2 gap-2">
-                    <MiniStat label="Delay" value={`${num(result.delta.vehicleDelayPct, 1)}%`} good={result.delta.vehicleDelayPct < 0} />
-                    <MiniStat label="Speed" value={`${num(result.delta.avgSpeedPct, 1)}%`} good={result.delta.avgSpeedPct > 0} />
-                    <MiniStat label="CO₂" value={`${num(result.delta.co2Pct, 1)}%`} good={result.delta.co2Pct < 0} />
-                    <MiniStat label="Cost" value={lakh(result.economics.capexLakh)} neutral />
-                  </div>
+                <div className="mt-5 space-y-4 pt-5" style={{ borderTop: '1px solid var(--rule)' }}>
+                  <dl className="space-y-2.5 text-xs">
+                    <Line2 label="Vehicle delay" value={`${num(result.delta.vehicleDelayPct, 1)}%`} good={result.delta.vehicleDelayPct < 0} />
+                    <Line2 label="Network speed" value={`${num(result.delta.avgSpeedPct, 1)}%`} good={result.delta.avgSpeedPct > 0} />
+                    <Line2 label="CO₂" value={`${num(result.delta.co2Pct, 1)}%`} good={result.delta.co2Pct < 0} />
+                  </dl>
+                  <dl className="space-y-2.5 pt-4 text-xs" style={{ borderTop: '1px solid var(--rule)' }}>
+                    <Line2 label="Capital cost" value={lakh(result.economics.capexLakh)} />
+                    <Line2
+                      label="Payback"
+                      value={result.economics.paybackMonths != null ? `${num(result.economics.paybackMonths, 1)} months` : 'No saving'}
+                    />
+                    <Line2 label="Deployment" value={`${result.economics.deployDays} days`} />
+                  </dl>
 
-                  <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 text-[11px] text-slate-400">
-                    <div className="flex items-center justify-between">
-                      <span>Payback</span>
-                      <span className="tnum font-semibold text-slate-200">
-                        {result.economics.paybackMonths != null ? `${num(result.economics.paybackMonths, 1)} months` : 'No saving'}
-                      </span>
-                    </div>
-                    <div className="mt-1.5 flex items-center justify-between">
-                      <span>Annual saving</span>
-                      <span className="tnum font-semibold text-emerald-300">{lakh(result.economics.annualSavingLakh)}</span>
-                    </div>
-                    <div className="mt-1.5 flex items-center justify-between">
-                      <span>Deployment</span>
-                      <span className="tnum font-semibold text-slate-200">{result.economics.deployDays} days</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
+                  <div className="space-y-2 pt-1">
                     <input
                       value={scenarioName}
                       onChange={(e) => setScenarioName(e.target.value)}
@@ -494,7 +428,7 @@ export default function SimulationStudio() {
                       className="field !py-2 !text-xs"
                     />
                     <button type="button" onClick={save} disabled={saving} className="btn-ghost w-full !text-xs">
-                      {saving ? <Spinner /> : <Save className="h-3.5 w-3.5" />}
+                      {saving ? <Spinner /> : null}
                       Save scenario
                     </button>
                   </div>
@@ -503,18 +437,15 @@ export default function SimulationStudio() {
             </div>
           </Panel>
 
-          <Panel>
-            <PanelHead title="Not sure where to start?" icon={BrainCircuit} />
-            <div className="p-4">
-              <p className="text-[11px] leading-relaxed text-slate-500">
-                The recommendation engine diagnoses every congested corridor and simulates the
-                strategies that treat it, then ranks them by outcome and cost.
-              </p>
-              <button type="button" onClick={() => navigate('/results')} className="btn-ghost mt-3 w-full !text-xs">
-                <Sparkles className="h-3.5 w-3.5" />
-                Open AI recommendations
-              </button>
-            </div>
+          <Panel className="self-start p-5">
+            <p className="text-xs font-medium text-bone-100">Not sure where to start?</p>
+            <p className="mt-2 text-2xs leading-relaxed text-ink-500">
+              The recommendation engine diagnoses every congested corridor, simulates the strategies
+              that treat it, and ranks them by outcome and cost.
+            </p>
+            <button type="button" onClick={() => navigate('/results')} className="btn-ghost mt-4 w-full !text-xs">
+              Open recommendations
+            </button>
           </Panel>
         </div>
       </div>
@@ -522,18 +453,25 @@ export default function SimulationStudio() {
   );
 }
 
-function MiniStat({ label, value, good, neutral }) {
+function PlaybackStat({ label, value, was, unit }) {
   return (
-    <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2.5">
-      <p className="text-[9px] uppercase tracking-wider text-slate-500">{label}</p>
-      <p
-        className={cx(
-          'tnum mt-1 text-sm font-bold',
-          neutral ? 'text-slate-200' : good ? 'text-emerald-300' : 'text-rose-300'
-        )}
-      >
-        {value}
+    <div>
+      <p className="label truncate">{label}</p>
+      <p className="tnum mt-1.5 text-xl font-medium leading-none text-bone-50">{value}</p>
+      <p className="tnum mt-1.5 text-2xs text-ink-600">
+        {unit ? `${unit} · ` : ''}was {was}
       </p>
+    </div>
+  );
+}
+
+function Line2({ label, value, good }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <dt className="text-ink-500">{label}</dt>
+      <dd className={cx('tnum font-medium', good == null ? 'text-bone-100' : good ? 'text-flow-free' : 'text-flow-severe')}>
+        {value}
+      </dd>
     </div>
   );
 }
@@ -555,7 +493,7 @@ function CorridorPicker({
   const selected = selection?.corridorCodes || [];
   const eligibleSet = useMemo(() => new Set(eligible), [eligible]);
 
-  // A corridor carried over from the map gets auto-targeted once, if eligible.
+  // A corridor carried over from the map gets targeted once, if it qualifies.
   useEffect(() => {
     if (focusCorridor && eligibleSet.has(focusCorridor) && !selected.includes(focusCorridor)) {
       onToggle(focusCorridor);
@@ -568,58 +506,48 @@ function CorridorPicker({
     `${c.shortName} ${c.code} ${c.jurisdiction}`.toLowerCase().includes(query.toLowerCase())
   );
 
-  const Icon = Icons[strategy?.icon] || Sparkles;
-
   return (
     <Panel>
       <PanelHead
         title={`Target corridors — ${strategy?.name}`}
-        subtitle={strategy?.description}
-        icon={Icon}
         actions={
           <>
             {selected.length > 0 && (
-              <button type="button" onClick={onRemove} className="btn-danger !py-1.5 !text-xs">
-                <Trash2 className="h-3.5 w-3.5" />
+              <button type="button" onClick={onRemove} className="btn-quiet !text-flow-severe">
                 Remove
               </button>
             )}
-            <button type="button" onClick={onClose} className="rounded-md p-1.5 text-slate-500 hover:text-slate-300" aria-label="Close picker">
-              <X className="h-4 w-4" />
+            <button type="button" onClick={onClose} className="rounded p-1 text-ink-500 hover:text-bone-200" aria-label="Close picker">
+              <X className="h-3.5 w-3.5" />
             </button>
           </>
         }
       />
 
-      <div className="space-y-4 p-4">
+      <div className="space-y-5 p-5">
+        <p className="max-w-[70ch] text-xs leading-relaxed text-ink-500">{strategy?.description}</p>
+
         {selected.length > 0 && (
-          <Slider
-            label="Deployment intensity"
-            value={selection.intensity}
-            onChange={onIntensity}
-            min={0.2}
-            max={1}
-            step={0.05}
-          />
+          <Slider label="Deployment intensity" value={selection.intensity} onChange={onIntensity} min={0.2} max={1} step={0.05} />
         )}
 
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-600" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-600" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search corridors…"
-            className="field !py-2 pl-8 !text-xs"
+            className="field !py-2 pl-9 !text-xs"
           />
         </div>
 
         {strategy?.requirementHint && (
-          <p className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[11px] text-slate-500">
-            Eligibility: {strategy.requirementHint}. Ineligible corridors are dimmed.
+          <p className="text-2xs text-ink-600">
+            Eligibility — {strategy.requirementHint}. Ineligible corridors are dimmed.
           </p>
         )}
 
-        <div className="max-h-[340px] space-y-1 overflow-y-auto pr-1">
+        <div className="max-h-[330px] divide-y divide-white/[0.045] overflow-y-auto">
           {filtered.map((c) => {
             const r = baseByCode[c.code];
             const isEligible = eligibleSet.has(c.code);
@@ -631,38 +559,29 @@ function CorridorPicker({
                 disabled={!isEligible}
                 onClick={() => onToggle(c.code)}
                 className={cx(
-                  'flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all',
-                  isOn
-                    ? 'border-brand-500/45 bg-brand-500/[0.09]'
-                    : isEligible
-                      ? 'border-white/[0.06] bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04]'
-                      : 'cursor-not-allowed border-white/[0.04] bg-white/[0.01] opacity-35'
+                  'flex w-full items-center gap-3 px-1 py-2.5 text-left transition-colors',
+                  isEligible ? 'hover:bg-white/[0.03]' : 'cursor-not-allowed opacity-30'
                 )}
               >
-                <span
-                  className={cx(
-                    'grid h-4 w-4 shrink-0 place-items-center rounded border transition-colors',
-                    isOn ? 'border-brand-400 bg-brand-400' : 'border-white/20'
-                  )}
-                >
-                  {isOn && <Check className="h-3 w-3 text-ink-950" strokeWidth={3.5} />}
-                </span>
-                <span className="h-7 w-1 shrink-0 rounded-full" style={{ background: vcColor(r?.vc || 0) }} />
+                <Checkbox checked={isOn} />
+                <span className="h-6 w-[2px] shrink-0 rounded-full" style={{ background: vcColor(r?.vc || 0) }} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-medium text-slate-200">{c.shortName}</p>
-                  <div className="mt-1">{r && <VcMeter vc={r.vc} />}</div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className={cx('truncate text-xs', isOn ? 'text-bone-50' : 'text-bone-200')}>{c.shortName}</p>
+                    <AuthorityTag code={c.jurisdiction} className="shrink-0" />
+                  </div>
+                  <div className="mt-1.5">{r && <VcMeter vc={r.vc} />}</div>
                 </div>
-                <AuthorityTag code={c.jurisdiction} className="shrink-0" />
               </button>
             );
           })}
         </div>
 
-        <div className="flex items-center justify-between border-t border-white/[0.06] pt-3 text-[11px] text-slate-500">
-          <span className="tnum">
+        <div className="tnum flex items-center justify-between pt-1 text-2xs text-ink-600">
+          <span>
             {selected.length} selected · {eligible.length} eligible of {corridors.length}
           </span>
-          <button type="button" onClick={onClose} className="btn-ghost !py-1.5 !text-xs">
+          <button type="button" onClick={onClose} className="btn-quiet">
             Done
           </button>
         </div>
