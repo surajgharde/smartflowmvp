@@ -1,0 +1,23 @@
+{
+  "name": "smartflow",
+  "private": true,
+  "version": "1.0.0",
+  "description": "SmartFlow — AI-assisted traffic distribution & simulation platform for Nagpur. Team Coders 2.0, Vikasit Nagpur Hackathon 2026.",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "setup": "npm install && npm run seed",
+    "seed": "npm --workspace server run seed",
+    "dev": "concurrently -n API,WEB -c cyan,magenta \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "npm --workspace server run dev",
+    "dev:client": "npm --workspace client run dev",
+    "build": "npm --workspace client run build",
+    "start": "npm --workspace server run start",
+    "verify": "node scripts/verify-api.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
