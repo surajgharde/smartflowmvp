@@ -128,6 +128,79 @@ morning peak, which is what drives the cross-jurisdiction diversion advisory.
 
 ---
 
+## Deployment (Vercel)
+
+The repository deploys as **one Vercel project**: the React build is served as
+static files and the Express API runs as a serverless function in the same
+deployment. That means the front end and back end share an origin, so `/api/...`
+just works and **there is no CORS to configure**.
+
+```
+vercel.json
+├── buildCommand      npm run build            → client/dist
+├── /api/(.*)         → api/index.mjs          (the whole Express app)
+└── /(.*)             → /index.html            (SPA fallback)
+```
+
+### Steps
+
+1. Push the repo to GitHub and import it in Vercel. Leave the framework preset as
+   **Other** — `vercel.json` already supplies the build command and output directory.
+2. Add these under **Settings → Environment Variables**:
+
+   | Name | Value |
+   |---|---|
+   | `MONGO_URI` | `mongodb+srv://USER:PASSWORD@cluster0.xxxxx.mongodb.net/smartflow?retryWrites=true&w=majority` |
+   | `JWT_SECRET` | a long random string |
+
+   The `/smartflow` database name is **required**. A URI that ends at the host
+   connects to the default `test` database, which will look empty.
+3. In Atlas → **Network Access**, allow `0.0.0.0/0`. Vercel functions have no
+   fixed egress IP, so an IP allow-list will fail in production.
+4. Seed the production database once, from your machine, with `MONGO_URI`
+   pointing at Atlas: `npm run seed`.
+
+### Why a refresh used to 404
+
+React Router owns `/map`, `/simulate`, `/reports/:id` and the rest. Those paths
+exist only in the browser — there is no `map.html` on disk. Loading `/` worked
+because `index.html` is a real file, but refreshing on `/map` asked the host for
+a file that was never built, so it returned 404.
+
+The second rewrite in `vercel.json` fixes it: any path that is not a real file
+returns `index.html`, and React Router takes over from there. The `/api/(.*)`
+rule is listed first so API calls are never swallowed by that fallback.
+
+### Testing the deployment locally
+
+Deployment bugs are miserable to debug through `git push`. This runs the exact
+production code path — built assets, the SPA fallback and the serverless
+function — on your machine:
+
+```bash
+npm run preview:deploy      # http://localhost:5052
+```
+
+Refresh `/map` there; if it works locally it will work on Vercel. To run the
+full API suite against that path: `SMARTFLOW_API=http://localhost:5052/api npm run verify`.
+
+### Hosting the API separately instead
+
+If you would rather run the back end on Render, Railway or a VM, the client
+supports it without a code change:
+
+1. Deploy the `server` workspace (`npm start`, which runs `server/src/index.js`).
+2. On the server set `CLIENT_ORIGIN` to your Vercel URL — it accepts a
+   comma-separated list.
+3. On Vercel set `VITE_API_URL=https://your-api-host.com/api` and redeploy.
+
+For a live demo the single-project setup is the safer choice: free tiers on
+separate hosts sleep after inactivity and can take 30–50 s to wake, whereas a
+Vercel function cold-starts in a second or two. Either way, load the page once a
+few minutes before you present so everything is warm.
+
+---
+
 ## Tech stack
 
 | Layer | Choice |

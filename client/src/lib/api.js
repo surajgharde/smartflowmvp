@@ -2,6 +2,19 @@
 
 const TOKEN_KEY = 'smartflow.token';
 
+/**
+ * Where the API lives.
+ *
+ * Default is the relative path `/api`, which is correct in both normal setups:
+ *   - local dev — Vite proxies /api to the Express server on :5050
+ *   - Vercel    — /api is rewritten to the serverless function in the same project
+ *
+ * Both are same-origin, so no CORS is involved. Set VITE_API_URL only when the
+ * API is hosted somewhere else entirely, e.g.
+ *   VITE_API_URL=https://smartflow-api.onrender.com/api
+ */
+const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/+$/, '');
+
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -28,7 +41,7 @@ async function request(path, { method = 'GET', body, signal } = {}) {
 
   let res;
   try {
-    res = await fetch(`/api${path}`, {
+    res = await fetch(`${API_BASE}${path}`, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -40,7 +53,18 @@ async function request(path, { method = 'GET', body, signal } = {}) {
   }
 
   const text = await res.text();
-  const data = text ? JSON.parse(text) : {};
+
+  // A misconfigured SPA fallback returns index.html for /api/* instead of JSON.
+  // Say so plainly rather than surfacing "Unexpected token <".
+  let data;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new ApiError(
+      `API returned HTML instead of JSON for ${path}. The /api route is not reaching the server — check the rewrite order in vercel.json.`,
+      res.status
+    );
+  }
 
   if (!res.ok) {
     // A dead session should bounce the operator back to sign-in, not spin forever.
